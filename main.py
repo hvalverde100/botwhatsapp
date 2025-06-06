@@ -1,27 +1,43 @@
+import os
+from flask import Flask, request
+from openai import OpenAI
+from prompts import estilo_hub  # asumo que este archivo y variable los tenés ya listos
+
+app = Flask(__name__)
+
+# Inicializar cliente OpenAI con API key de variable de entorno
+client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+
+@app.route('/health', methods=['GET'])
+def health():
+    return 'OK', 200
+
 @app.route('/webhook', methods=['POST'])
 def webhook():
+    # Recibimos el form-data que manda Twilio
     payload = request.form.to_dict()
     print("DEBUG Twilio payload:", payload)
 
     incoming_msg = payload.get('Body') or payload.get('Cuerpo')
-    if not incoming_msg:
-        return "", 204
+    sender = payload.get('From') or payload.get('De')
 
-    try:
-        response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": estilo_hub},
-                {"role": "user", "content": incoming_msg}
-            ]
-        )
-        texto = response.choices[0].message.content.strip()
-    except Exception as e:
-        print("Error OpenAI:", e)
-        texto = "Lo siento, tuve un problema respondiendo tu mensaje."
+    # Llamar al endpoint de chat completions
+    response = client.chat.completions.create(
+        model="gpt-3.5-turbo",
+        messages=[
+            {"role": "system", "content": estilo_hub},
+            {"role": "user", "content": incoming_msg}
+        ]
+    )
+    texto = response.choices[0].message.content
 
+    # Crear respuesta en TwiML para Twilio
     twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
     <Message>{texto}</Message>
 </Response>"""
     return twiml, 200, {'Content-Type': 'application/xml'}
+
+if __name__ == '__main__':
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
