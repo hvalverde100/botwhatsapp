@@ -1,25 +1,21 @@
 from flask import Flask, request
-import openai
-from prompts import estilo_hub
+import requests
+import os
 
 app = Flask(__name__)
-openai.api_key = "TU_API_KEY"
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
-    incoming_msg = request.form.get('Body')
-    sender = request.form.get('From')
+    # Twilio manda form data, no JSON
+    payload = request.form.to_dict()
 
-    respuesta = openai.ChatCompletion.create(
-        model="gpt-4",
-        messages=[
-            {"role": "system", "content": estilo_hub},
-            {"role": "user", "content": incoming_msg}
-        ]
+    # Re-envío a Webhook.site para chequear que llegue
+    requests.post(
+        "https://webhook.site/e0138e39-fea6-45ff-b655-c8e3d8f9313b",
+        json=payload
     )
-    texto = respuesta.choices[0].message["content"]
+    return 'OK', 200
 
-    return f"""<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-    <Message>{texto}</Message>
-</Response>""", 200, {'Content-Type': 'application/xml'}
+if __name__ == '__main__':
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
