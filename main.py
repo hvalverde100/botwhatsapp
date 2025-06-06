@@ -1,8 +1,7 @@
 import os
 import logging
 from flask import Flask, request, Response
-from openai import OpenAI
-from openai.error import RateLimitError
+from openai import OpenAI, OpenAIError
 from prompts import estilo_hub
 
 # Logging
@@ -35,8 +34,8 @@ def webhook():
 
     logging.info(f"Mensaje entrante: '{incoming}' de '{sender}'")
     if not incoming:
-        return Response("<Response><Message>No recibí texto 😕</Message></Response>",
-                        mimetype='application/xml'), 200
+        xml = "<Response><Message>No recibí texto 😕</Message></Response>"
+        return Response(xml, mimetype='application/xml'), 200
 
     try:
         resp = client.chat.completions.create(
@@ -48,12 +47,20 @@ def webhook():
         )
         reply = resp.choices[0].message.content.strip()
         logging.info(f"Respuesta OpenAI: {reply}")
-    except RateLimitError as e:
-        logging.error(f"RateLimitError: {e}")
-        reply = "Ups, se acabó el crédito de la API por hoy. Te aviso cuando recargue."
+
+    except OpenAIError as e:
+        # Detectar cuota excedida en el mensaje de error
+        errmsg = str(e).lower()
+        if 'quota' in errmsg or 'rate limit' in errmsg or 'insufficient_quota' in errmsg:
+            logging.error(f"Quota excedida: {e}")
+            reply = "Ups, me quedé sin crédito de la API hoy. Avisame cuando recargue."
+        else:
+            logging.error(f"Error OpenAI: {e}")
+            reply = "Lo siento, ahora mismo no puedo responder. Intenta más tarde."
+
     except Exception as e:
         logging.error(f"Error inesperado: {e}")
-        reply = "Lo siento, tuve un problema respondiendo. Intenta más tarde."
+        reply = "Lo siento, algo salió mal. Intenta de nuevo más tarde."
 
     xml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
