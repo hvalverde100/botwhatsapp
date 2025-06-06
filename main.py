@@ -1,49 +1,37 @@
 from flask import Flask, request, Response
 from twilio.twiml.messaging_response import MessagingResponse
-import os
-import openai
+import os, openai
 from openai.error import RateLimitError
 
 app = Flask(__name__)
-
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
-    try:
-        incoming_msg = request.values.get("Body", "").strip()
-        print("DEBUG Twilio payload:", request.values)
-
-        if not incoming_msg:
-            resp = MessagingResponse()
-            resp.message("No recibí ningún mensaje, ¿puedes intentar de nuevo?")
-            return str(resp)
-
-        # Llamada a OpenAI ChatCompletion
-        response = openai.ChatCompletion.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "Eres un asistente amigable y útil."},
-                {"role": "user", "content": incoming_msg}
-            ],
-            max_tokens=500,
-            temperature=0.7,
-        )
-
-        reply_text = response.choices[0].message.content.strip()
-
-    except RateLimitError:
-        # Manejo cuando se excede la cuota de OpenAI
-        print("ERROR: Se excedió la cuota de la API de OpenAI")
-        reply_text = "Ups, he llegado al límite de uso hoy. Intenta más tarde."
-
-    except Exception as e:
-        print("ERROR inesperado:", e)
-        reply_text = "Lo siento, hubo un problema al procesar tu mensaje."
-
+    incoming_msg = request.values.get("Body", "").strip()
     resp = MessagingResponse()
-    resp.message(reply_text)
+
+    if not incoming_msg:
+        resp.message("¿Me escribiste algo? No lo veo.")
+        return str(resp)
+
+    try:
+        chat = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "Eres un bot amigable de Mercado Mayoreo."},
+                {"role": "user",   "content": incoming_msg}
+            ]
+        )
+        reply = chat.choices[0].message.content.strip()
+    except RateLimitError:
+        reply = "Se acabó el crédito de la API por hoy. Te aviso cuando recargue."
+    except Exception as e:
+        print("Error inesperado:", e)
+        reply = "Lo siento, hubo un problema. Intenta más tarde."
+
+    resp.message(reply)
     return str(resp)
 
 if __name__ == "__main__":
-    app.run(debug=True, port=10000)
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)))
