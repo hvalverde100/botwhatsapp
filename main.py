@@ -14,7 +14,7 @@ def home():
 @app.route("/bot", methods=["POST"])
 def bot():
     user_message = request.json.get("message", "")
-    
+
     response = openai.ChatCompletion.create(
         model="mistralai/mixtral-8x7b",
         messages=[
@@ -28,6 +28,6 @@ def bot():
     })
 
 if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", port=10000)
-
-
+    import os
+    port = int(os.environ.get("PORT", 10000))
+    app.run(debug=True, host="0.0.0.0", port=port)
