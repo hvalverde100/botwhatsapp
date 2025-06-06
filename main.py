@@ -25,7 +25,7 @@ def webhook():
 
     # Llamamos al nuevo endpoint de chat completions
     response = client.chat.completions.create(
-        model="gpt-4",
+        model="gpt-3.5-turbo",
         messages=[
             {"role": "system", "content": estilo_hub},
             {"role": "user",   "content": incoming_msg}
