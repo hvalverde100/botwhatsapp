@@ -1,74 +1,33 @@
-import os
-import logging
-from flask import Flask, request, Response
-from openai import OpenAI, OpenAIError
-from prompts import estilo_hub
-
-# Logging
-logging.basicConfig(level=logging.INFO)
-
-# Inicializar cliente OpenAI
-api_key = os.environ.get("OPENAI_API_KEY")
-if not api_key:
-    logging.error("❌ OPENAI_API_KEY no encontrada en variables de entorno")
-    raise RuntimeError("OPENAI_API_KEY no definida")
-client = OpenAI(api_key=api_key)
+import openai
+from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 
-@app.route('/', methods=['GET'])
-def index():
-    return 'Superbot activo 👊', 200
+# Clave y endpoint de OpenRouter (gratuito)
+openai.api_key = "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"
+openai.api_base = "https://openrouter.ai/api/v1"
 
-@app.route('/health', methods=['GET'])
-def health():
-    return 'OK', 200
+@app.route("/", methods=["GET"])
+def home():
+    return "¡Hola desde tu superbot en Render! 😎"
 
-@app.route('/webhook', methods=['POST'])
-def webhook():
-    payload = request.form.to_dict()
-    logging.info(f"DEBUG Twilio payload: {payload}")
+@app.route("/bot", methods=["POST"])
+def bot():
+    user_message = request.json.get("message", "")
+    
+    response = openai.ChatCompletion.create(
+        model="mistralai/mixtral-8x7b",
+        messages=[
+            {"role": "system", "content": "Sos un asistente simpático, directo, como un buen amigo tico."},
+            {"role": "user", "content": user_message}
+        ]
+    )
 
-    incoming = payload.get('Body') or payload.get('Cuerpo') or ''
-    sender   = payload.get('From') or payload.get('De') or ''
+    return jsonify({
+        "response": response["choices"][0]["message"]["content"]
+    })
 
-    logging.info(f"Mensaje entrante: '{incoming}' de '{sender}'")
-    if not incoming:
-        xml = "<Response><Message>No recibí texto 😕</Message></Response>"
-        return Response(xml, mimetype='application/xml'), 200
+if __name__ == "__main__":
+    app.run(debug=True, host="0.0.0.0", port=10000)
 
-    try:
-        resp = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": estilo_hub},
-                {"role": "user",   "content": incoming}
-            ]
-        )
-        reply = resp.choices[0].message.content.strip()
-        logging.info(f"Respuesta OpenAI: {reply}")
 
-    except OpenAIError as e:
-        # Detectar cuota excedida en el mensaje de error
-        errmsg = str(e).lower()
-        if 'quota' in errmsg or 'rate limit' in errmsg or 'insufficient_quota' in errmsg:
-            logging.error(f"Quota excedida: {e}")
-            reply = "Ups, me quedé sin crédito de la API hoy. Avisame cuando recargue."
-        else:
-            logging.error(f"Error OpenAI: {e}")
-            reply = "Lo siento, ahora mismo no puedo responder. Intenta más tarde."
-
-    except Exception as e:
-        logging.error(f"Error inesperado: {e}")
-        reply = "Lo siento, algo salió mal. Intenta de nuevo más tarde."
-
-    xml = f"""<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-    <Message>{reply}</Message>
-</Response>"""
-    return Response(xml, mimetype='application/xml'), 200
-
-if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 5000))
-    logging.info(f"Arrancando en puerto {port}")
-    app.run(host='0.0.0.0', port=port)
