@@ -4,8 +4,8 @@ from flask import Flask, request
 from openai import OpenAI
 from prompts import estilo_hub
 
-# Inicializar cliente OpenAI
-client = OpenAI()
+# Inicializar cliente OpenAI con API key de la variable de entorno
+client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
 
 app = Flask(__name__)
 
@@ -15,15 +15,12 @@ def health():
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
-    # Twilio manda form-data con la clave 'Body' o 'Cuerpo'
     payload_dict = request.form.to_dict()
     incoming_msg = payload_dict.get('Body') or payload_dict.get('Cuerpo')
     sender = payload_dict.get('From') or payload_dict.get('De')
 
-    # DEBUG: ver lo que llega
     print("DEBUG Twilio payload:", payload_dict)
 
-    # Llamada al nuevo endpoint de chat completions
     chat_resp = client.chat.completions.create(
         model="gpt-4",
         messages=[
@@ -33,7 +30,6 @@ def webhook():
     )
     texto = chat_resp.choices[0].message.content
 
-    # Enviar respuesta en TwiML
     twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
     <Message>{texto}</Message>
